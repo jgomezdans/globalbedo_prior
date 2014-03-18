@@ -30,6 +30,7 @@ except ImportError:
     print "You need to have the GDAL Python bindings installed!"
 
 from ga_utils import *
+
 # Authors etc
 __author__ = "P Lewis & J Gomez-Dans (NCEO&UCL)"
 __copyright__ = "(c) 2014"
@@ -74,7 +75,10 @@ class GlobAlbedoPrior ( object ):
         self.get_modis_fnames ()
     
     def get_modis_fnames ( self ):
-        """This method gets the MODIS filenames and stores them"""
+        """This method gets the MODIS filenames and stores them in dictionaries
+        that can be accessed by DoY. This is quite useful for Stage 1 prior
+        creation.
+        """
         self.fnames_mcd43a1 = {}
         self.fnames_mcd43a2 = {}
         for doy in xrange ( 1, 367, 8 ):
@@ -84,6 +88,31 @@ class GlobAlbedoPrior ( object ):
             pattern = "MCD43A2.A????%03d.%s.005.*.hdf" % ( doy, self.tile )
             self.fnames_mcd43a2[doy] = [ f for f in locate( pattern, \
                 root=self.data_dir ) ]
+            
+    def create_output ( self ):
+        self.output_ptrs = {}
+        gdal_opts = [ "COMPRESS=LZW", "INTERLEAVE=BAND", "TILED=YES" ]
+        for band in self.bands:
+            for doy in self.fnames_mcd43a1.iterkeys():
+                output_fname = os.path.join ( root_dir, "%s.%s.%s.tif" % \
+                            ( output, product, suffix ) )
+                                                      
+                if os.path.exists ( output_fname ):
+                    print "Removing %s... " % output_fname, 
+                    os.remove ( output_fname )
+                    sys.stdout.flush()
+                print "Creating %s" % output_fname,
+                sys.stdout.flush()
+                drv = gdal.GetDriverByName ( "GTiff" )
+                output_prod = "%s_%s" % ( output, product )
+                self.output_ptrs[output_prod] = drv.Create( output_fname, 2400, 2400, \
+                    3, gdal.GDT_Float32, options=gdal_opts )
+                dst_ds[output_prod].SetGeoTransform( g.GetGeoTransform() )
+                dst_ds[output_prod].SetProjection( g.GetProjectionRef() )
+                print "... Created!"
+    def stage1_prior ( self ):
+        """Produce the stage 1 prior, which is simply a weighted average of the
+        kernel weights. This"""
             
 if __name__ == "__main__":
     ga = GlobAlbedoPrior("h19v10", "/data/netapp_3/plewis/albedo/", "/data/netapp_3/plewis/albedo/prior", bands=[1,2] )
