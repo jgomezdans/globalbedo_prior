@@ -29,6 +29,7 @@ try:
 except ImportError:
     print "You need to have the GDAL Python bindings installed!"
 
+from ga_utils import *
 # Authors etc
 __author__ = "P Lewis & J Gomez-Dans (NCEO&UCL)"
 __copyright__ = "(c) 2014"
@@ -69,3 +70,21 @@ class GlobAlbedoPrior ( object ):
         self.data_dir = data_dir
         self.output_dir = output_dir
         self.bands = bands
+        # Now, get the list of filenames that we are going to use...
+        self.get_modis_fnames ()
+    
+    def get_modis_fnames ( self ):
+        """This method gets the MODIS filenames and stores them"""
+        self.fnames_mcd43a1 = {}
+        self.fnames_mcd43a2 = {}
+        for doy in xrange ( 1, 367, 8 ):
+            pattern = "MCD43A1.A????%03d.%s.005.*.hdf" % ( doy, self.tile )
+            self.fnames_mcd43a1[doy] = [ f for f in locate( pattern, \
+                root=self.data_dir ) ]
+            pattern = "MCD43A2.A????%03d.%s.005.*.hdf" % ( doy, self.tile )
+            self.fnames_mcd43a2[doy] = [ f for f in locate( pattern, \
+                root=self.data_dir ) ]
+            
+if __name__ == "__main__":
+    ga = GlobAlbedoPrior("h19v10", "/data/netapp_3/plewis/albedo/", "/data/netapp_3/plewis/albedo/prior", bands=[1,2] )
+    

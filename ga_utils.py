@@ -56,7 +56,8 @@ def locate( pattern, root=os.curdir ):
         A pattern in UNIX-speak e.g. "MCD43*.hdf"
     root: str
         The root directory where to start searching.
-       """
+    """
+    import fnmatch
     for path, dirs, files in os.walk( os.path.abspath( root ) ):
         for filename in fnmatch.filter( files, pattern ):
             yield os.path.join( path, filename )
