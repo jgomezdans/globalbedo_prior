@@ -140,7 +140,7 @@ def extract_chunks ( the_files, the_bands = None ):
     ds_config['geoT'] = geoT
     ds_config['proj'] = proj
     block_size = [ block_size[0], block_size[1] ]
-    block_size = [ 1200, 1200 ]
+    #block_size = [ 1200, 1200 ]
     # store these numbers in variables that may change later
     nx_valid = block_size[0]
     ny_valid = block_size[1]

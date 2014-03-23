@@ -43,6 +43,7 @@ __status__ = "Development"
 
 # MAGIC number
 MAGIC = 0.61803398875
+gdal_opts = [ "COMPRESS=LZW", "INTERLEAVE=BAND", "TILED=YES" ]
 
 # Set up logging
 LOG = logging.getLogger( __name__ )
@@ -74,11 +75,18 @@ class GlobAlbedoPrior ( object ):
             A flag indicating whether to choose the snow free or the snow albedo results
         """
         self.tile = tile
+        LOG.info ("Doing tile %s" % self.tile )
         self.data_dir = data_dir
         self.output_dir = output_dir
         self.bands = bands
+        LOG.info ("Doing bands %s" % str ( self.bands ))
+
         # Now, get the list of filenames that we are going to use...
         self.get_modis_fnames ()
+        LOG.info ("Found %d(MCD43A1)/%d(MCD43A2) HDF files in %s" % \
+            ( len ( self.fnames_mcd43a1 ), len( self.fnames_mcd43a2 ), \
+            self.data_dir ) )
+        LOG.info ("Will write output in %s" % self.output_dir )
         self.no_snow = no_snow
     
     def get_modis_fnames ( self ):
@@ -150,25 +158,24 @@ class GlobAlbedoPrior ( object ):
     
     def create_output ( self ):
         self.output_ptrs = {}
-        gdal_opts = [ "COMPRESS=LZW", "INTERLEAVE=BAND", "TILED=YES" ]
+
         for band in self.bands:
             for doy in self.fnames_mcd43a1.iterkeys():
                 for kernel in [ "iso", "volu", "geo"]:
                     output_fname = os.path.join ( self.output_dir, \
                         "MCD43P.%03d.%s.%s.b%d.tif" % \
                         ( doy, kernel, self.tile, band ) )
-                                                      
+                    LOG.info ( "Creating %s" % output_fname )
+                   
+                                                              
                     if os.path.exists ( output_fname ):
-                        print "Removing %s... " % output_fname, 
+                        LOG.info( "Removing %s... " % output_fname )
                         os.remove ( output_fname )
-                        sys.stdout.flush()
-                    print "Creating %s" % output_fname,
-                    sys.stdout.flush()
                     drv = gdal.GetDriverByName ( "GTiff" )
                     output_prod = "%03d_%s_b%d" % ( doy, kernel, band )
                     self.output_ptrs[output_prod] = drv.Create( output_fname, \
                         2400, 2400, 2, gdal.GDT_Float32, options=gdal_opts )
-                    print "... Created!"
+                    LOG.info("\t... Created!")
                     
     def do_qa ( self, data_in, n_years ):
         """A simple method to do the QA from the read data. The reason for this is
@@ -209,7 +216,7 @@ class GlobAlbedoPrior ( object ):
         self.create_output ()
         for band in self.bands:
             for doy in self.fnames_mcd43a1.iterkeys():
-                print "Doing band %d, DoY %d..." % ( band, doy )
+                LOG.info ("Doing band %d, DoY %d..." % ( band, doy ) )
                 obs_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Parameters_Band%d' % ( f, band ) \
                         for f in self.fnames_mcd43a1[doy] ]
                 qa_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Band_Quality' % ( f ) \
@@ -223,6 +230,7 @@ class GlobAlbedoPrior ( object ):
                 all_files = obs_fnames + qa_fnames + snow_fnames + land_fnames
                 for (ds_config, this_X, this_Y, nx_valid, ny_valid, data_in )  \
                         in extract_chunks ( all_files ):
+                    LOG.info ("Read a %d x %d pixel chunk..." % ( ny_valid, nx_valid ) )
                     n_years = len ( data_in )/4 # First lot will be BRDF parameters, 2nd will be QA,
                                                 # 3 snow mask and fourth land mask
 
@@ -234,6 +242,7 @@ class GlobAlbedoPrior ( object ):
                     # data_in contains all the data. Half the samples bands are 
                     # BRDF parameters        
                     for i, kernel in enumerate ( [ "iso", "volu", "geo" ] ):
+                        
                         output_prod = "%03d_%s_b%d" % ( doy, kernel, band )
                         bout = self.output_ptrs[output_prod].GetRasterBand ( 1 )
                         bout.WriteArray ( prior_mean[i, :, :].astype(np.float32), \
@@ -241,12 +250,43 @@ class GlobAlbedoPrior ( object ):
                         bout = self.output_ptrs[output_prod].GetRasterBand ( 2 )
                         bout.WriteArray ( prior_var[i, :, :].astype(np.float32), \
                             xoff=this_X, yoff=this_Y )
-                            
                 output_prod = "%03d_%s_b%d" % (doy, kernel, band) 
                 self.output_ptrs[output_prod].SetGeoTransform( ds_config['geoT'] )
                 self.output_ptrs[output_prod].SetProjection( ds_config['proj'] )
-                print "\t\t Burrpp!!"
-                    
+                LOG.info( "\t\t Burrpp!!" )
+
+    def stage2( self ):
+        t = np.arange ( 1, 367 )
+        ts = np.arange ( 1, 367, 8 )
+        w = np.exp ( -0.0866*np.abs ( t - 183) )
+        w = np.roll ( w, -183 ) # Shift to 31 Dec
+        for band in self.bands:
+            for kernel in [ "iso", "volu", "geo"]:
+                drv = gdal.GetDriverByName ( "GTiff" )
+                output_fname = os.path.join ( self.output_dir, \
+                   "MD43P.%s.%s.%b%d.tif" % ( kernel, self.tile, band ) )
+                dst_ds = drv.Create ( output_fname, len(t), 2400, 2400, \
+                   gdal.GDT_Float32, options=gdal_opts )
+
+                mean_vals = np.empty ((len(ts), 2400, 2400))
+                i = 0
+                for d in ts:
+                    g = gdal.Open ( os.path.join ( self.output_dir, \
+                        "MCD43P.%03d.%s.%s.b%d.tif" % \
+                        ( d, kernel, self.tile, band ) ))
+                    mean_vals [ i, :, : ]= g.GetRasterBand(1).ReadAsArray()
+                    i += 1
+                for this_doy in t:
+                    w = np.roll ( w, this_doy )[ts]
+                    mean_vals = np.ma.array ( mean_vals, mask=mean_vals == 0.)
+                    mean_iterp = np.ma.average ( mean_vals, \
+                        axis=0, weights=w )
+                    dst_ds.GetRasterBand ( this_doy ).WriteArray ( mean_interp )
+                dst_ds.SetGeoTransform ( g.GetGeoTransform() )
+                dst_ds.SetProjection ( g.GetProjection() )
+                dst_ds = None
+            
+        
 if __name__ == "__main__":
     ga = GlobAlbedoPrior("h17v04", "/data/netapp_3/plewis/albedo/", "/data/netapp_3/plewis/albedo/prior", bands=[1,2] )
     ga.stage1_prior()
