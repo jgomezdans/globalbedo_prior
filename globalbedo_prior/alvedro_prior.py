@@ -12,7 +12,7 @@ from .GlobAlbedoPrior import GlobAlbedoPrior
 __author__ = "P Lewis & J Gomez-Dans (NCEO&UCL)"
 __copyright__ = "(c) 2014"
 __license__ = "GPL"
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __maintainer__ = "J Gomez-Dans"
 __email__ = "j.gomez-dans@ucl.ac.uk"
 __status__ = "Development"
