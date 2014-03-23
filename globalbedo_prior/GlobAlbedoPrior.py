@@ -82,10 +82,10 @@ class GlobAlbedoPrior ( object ):
         LOG.info ("Doing bands %s" % str ( self.bands ))
 
         # Now, get the list of filenames that we are going to use...
-        self.get_modis_fnames ()
+        a1, a2 = self.get_modis_fnames ()
+        
         LOG.info ("Found %d(MCD43A1)/%d(MCD43A2) HDF files in %s" % \
-            ( len ( self.fnames_mcd43a1 ), len( self.fnames_mcd43a2 ), \
-            self.data_dir ) )
+            ( a1, a2, self.data_dir ) )
         LOG.info ("Will write output in %s" % self.output_dir )
         self.no_snow = no_snow
     
@@ -98,6 +98,8 @@ class GlobAlbedoPrior ( object ):
         """
         self.fnames_mcd43a1 = {}
         self.fnames_mcd43a2 = {}
+        a1_files = 0
+        a2_files = 0
         for doy in xrange ( 1, 367, 8 ):
             pattern = "MCD43A1.A????%03d.%s.005.*.hdf" % ( doy, self.tile )
             self.fnames_mcd43a1[doy] = [ f for f in locate( pattern, \
@@ -105,7 +107,14 @@ class GlobAlbedoPrior ( object ):
             pattern = "MCD43A2.A????%03d.%s.005.*.hdf" % ( doy, self.tile )
             self.fnames_mcd43a2[doy] = [ f for f in locate( pattern, \
                 root=self.data_dir ) ]
-            
+            a1_files += len ( self.fnames_mcd43a1[doy] )
+            a2_files += len ( self.fnames_mcd43a2[doy] )
+        if a1_files != a2_files:
+            raise IOError("I didn't find the same number of MCD43A1 and MCD43A2 files!")
+        if a1_files == 0:
+            raise IOError("No files found!!! You sure about the tile and directory?")
+        return a1_files, a2_files
+    
     def _interpret_qa ( self, qa_data ):
         """Interpret QA
         A method to interpret the QA according to the GlobAlbedo specs. The 
@@ -165,17 +174,17 @@ class GlobAlbedoPrior ( object ):
                     output_fname = os.path.join ( self.output_dir, \
                         "MCD43P.%03d.%s.%s.b%d.tif" % \
                         ( doy, kernel, self.tile, band ) )
-                    LOG.info ( "Creating %s" % output_fname )
+                    LOG.debug ( "Creating %s" % output_fname )
                    
                                                               
                     if os.path.exists ( output_fname ):
-                        LOG.info( "Removing %s... " % output_fname )
+                        LOG.debug( "Removing %s... " % output_fname )
                         os.remove ( output_fname )
                     drv = gdal.GetDriverByName ( "GTiff" )
                     output_prod = "%03d_%s_b%d" % ( doy, kernel, band )
                     self.output_ptrs[output_prod] = drv.Create( output_fname, \
                         2400, 2400, 2, gdal.GDT_Float32, options=gdal_opts )
-                    LOG.info("\t... Created!")
+                    LOG.debug("\t... Created!")
                     
     def do_qa ( self, data_in, n_years ):
         """A simple method to do the QA from the read data. The reason for this is
