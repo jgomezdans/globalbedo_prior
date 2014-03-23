@@ -255,7 +255,7 @@ class GlobAlbedoPrior ( object ):
                 self.output_ptrs[output_prod].SetProjection( ds_config['proj'] )
                 LOG.info( "\t\t Burrpp!!" )
 
-    def stage2( self ):
+    def stage2_prior( self ):
         t = np.arange ( 1, 367 )
         ts = np.arange ( 1, 367, 8 )
         w = np.exp ( -0.0866*np.abs ( t - 183) )
