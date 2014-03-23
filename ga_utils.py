@@ -119,7 +119,7 @@ def extract_chunks ( the_files, the_bands = None ):
     ds_config['geoT'] = geoT
     ds_config['proj'] = proj
     block_size = [ block_size[0], block_size[1] ]
-    block_size = [ 256, 256 ]
+    block_size = [ 1200, 1200 ]
     # store these numbers in variables that may change later
     nx_valid = block_size[0]
     ny_valid = block_size[1]
@@ -155,6 +155,8 @@ def extract_chunks ( the_files, the_bands = None ):
             this_Y = Y*block_size[1]
             data_in = []
             for ig, ptr in enumerate ( gdal_ptrs ):
+                # We can have different numbers of bands!
+                the_bands = np.arange (1, ptr.RasterCount + 1)
                 buf = ptr.ReadRaster(this_X, this_Y, nx_valid, ny_valid, \
                     buf_xsize=nx_valid, buf_ysize=ny_valid,  \
                     band_list= the_bands )

@@ -28,7 +28,7 @@ try:
     from osgeo import gdal
 except ImportError:
     print "You need to have the GDAL Python bindings installed!"
-
+import matplotlib.pyplot as plt
 from ga_utils import *
 
 # Authors etc
@@ -39,6 +39,10 @@ __version__ = "1.0"
 __maintainer__ = "J Gomez-Dans"
 __email__ = "j.gomez-dans@ucl.ac.uk"
 __status__ = "Development"
+
+
+# MAGIC number
+MAGIC = 0.61803398875
 
 # Set up logging
 LOG = logging.getLogger( __name__ )
@@ -136,6 +140,21 @@ class GlobAlbedoPrior ( object ):
                     3, gdal.GDT_Float32, options=gdal_opts )
                 
                 print "... Created!"
+    def do_qa ( self, data_in, n_years ):
+        """A simple method to do the QA from the read data. The reason for this is
+        to get Python's garbage collector to deallocate the memory of all these
+        temporary arrays after we have calculated the mask"""
+        
+        qa_data = np.array ( data_in [ (n_years):(2*n_years)] )
+        snow_data = np.array ( data_in [ (2*n_years):(3*n_years)] )
+        land_data = np.array ( data_in[ (3*n_years):] )
+        
+        qa = self._interpret_qa ( qa_data )
+        snow = self._interpret_snowmask ( snow_data )
+        land = self._interpret_landcover ( land_data )
+        mask = qa*snow*land
+        return mask
+    
     def stage1_prior ( self, band ):
         """Produce the stage 1 prior, which is simply a weighted average of the
         kernel weights. This"""
@@ -152,22 +171,33 @@ class GlobAlbedoPrior ( object ):
                     for f in self.fnames_mcd43a2[doy] ]
 
 
-            all_files = obs_fnames + qa_fnames
+            all_files = obs_fnames + qa_fnames + snow_fnames + land_fnames
             first_time = True
             for (ds_config, this_X, this_Y, nx_valid, ny_valid, data_in )  \
-                    in extract_chunk ( all_files ):
+                    in extract_chunks ( all_files ):
                 n_years = len ( data_in )/4 # First lot will be BRDF parameters, 2nd will be QA,
                                             # 3 snow mask and fourth land mask
-                brdf_data = data_in [ :n_years]
-                
-                self._interpret_qa ( qa_data )
                 if first_time:
+                    mean_params = np.zeros (( 3, 2400, 2400 ))
                     # set geotransforme etc for this glorious day
-                    self.output_ptrs[output_prod].SetGeoTransform( ds_config['geoT'] )
-                    self.output[output_prod].SetProjection( ds_config['proj'] )
+                    #self.output_ptrs[output_prod].SetGeoTransform( ds_config['geoT'] )
+                    #self.output[output_prod].SetProjection( ds_config['proj'] )
                     first_time = False
+
+                mask = self.do_qa ( data_in, n_years )
+                brdf_data = np.array ( data_in [ :n_years] )
+                # Process per kernel weight
+                for i in xrange ( 3 ):
+                    A = np.ma.array ( brdf_data[:, i, :, :]*0.0010, \
+                        mask=np.logical_or ( brdf_data[:, i, :, :] == 32767, \
+                        mask == 0 ))
+                
+                    mean_params[i,(this_Y):(this_Y + ny_valid ), \
+                        (this_X):(this_X+nx_valid)] = np.ma.average ( \
+                            A, axis=0,weights=mask)
+                
                 # data_in contains all the data. Half the samples bands are BRDF parameters        
-            
+
 if __name__ == "__main__":
-    ga = GlobAlbedoPrior("h19v10", "/data/netapp_3/plewis/albedo/", "/data/netapp_3/plewis/albedo/prior", bands=[1,2] )
-    
+    ga = GlobAlbedoPrior("h17v04", "/data/netapp_3/plewis/albedo/", "/data/netapp_3/plewis/albedo/prior", bands=[1,2] )
+    ga.stage1_prior ( 2 )
