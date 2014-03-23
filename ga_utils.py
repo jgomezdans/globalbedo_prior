@@ -47,6 +47,27 @@ GDAL2NUMPY = {  gdal.GDT_Byte      :   np.uint8,
                 gdal.GDT_CFloat64  :   np.complex128
                 }
 
+def calculate_prior ( brdf_data, mask ):
+    """Calculates the prior mean from the data & data mask
+    Prior is tested, and looks OK, the variance is untested"""
+    prior_mean = np.zeros((3, brdf_data.shape[-2], brdf_data.shape[-1] ))
+    prior_var = np.zeros((3, brdf_data.shape[-2], brdf_data.shape[-1]))
+    for i in xrange ( 3 ):
+        A = np.ma.array ( brdf_data[:, i, :, :]*0.0010, \
+            mask=np.logical_or ( brdf_data[:, i, :, :] == 32767, \
+            mask == 0 ))
+        kw_mean = np.ma.average ( A, axis=0, weights = mask )
+        v1 = np.ma.sum ( mask, axis=0)
+        v2 = np.ma.sum ( mask**2, axis=0 )
+        kw_weight = np.sum( mask*(A - kw_mean)**2, axis = 0 )*\
+            (v1/(v1*v1 - v2) )
+        prior_mean[i, :, :] = kw_mean
+        prior_var[i, :, :] = kw_weight
+        
+        
+    return prior_mean, prior_var
+
+
 def locate( pattern, root=os.curdir ):
     """Locate all files matching supplied filename pattern in and below
     supplied root directory.

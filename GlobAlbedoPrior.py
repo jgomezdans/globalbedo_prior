@@ -153,21 +153,23 @@ class GlobAlbedoPrior ( object ):
         gdal_opts = [ "COMPRESS=LZW", "INTERLEAVE=BAND", "TILED=YES" ]
         for band in self.bands:
             for doy in self.fnames_mcd43a1.iterkeys():
-                output_fname = os.path.join ( root_dir, "%s.%s.%s.tif" % \
-                            ( output, product, suffix ) )
+                for kernel in [ "iso", "volu", "geo"]:
+                    output_fname = os.path.join ( self.output_dir, \
+                        "MCD43P.%03d.%s.%s.b%d.tif" % \
+                        ( doy, kernel, self.tile, band ) )
                                                       
-                if os.path.exists ( output_fname ):
-                    print "Removing %s... " % output_fname, 
-                    os.remove ( output_fname )
+                    if os.path.exists ( output_fname ):
+                        print "Removing %s... " % output_fname, 
+                        os.remove ( output_fname )
+                        sys.stdout.flush()
+                    print "Creating %s" % output_fname,
                     sys.stdout.flush()
-                print "Creating %s" % output_fname,
-                sys.stdout.flush()
-                drv = gdal.GetDriverByName ( "GTiff" )
-                output_prod = "%s_%s" % ( output, product )
-                self.output_ptrs[output_prod] = drv.Create( output_fname, 2400, 2400, \
-                    3, gdal.GDT_Float32, options=gdal_opts )
-                
-                print "... Created!"
+                    drv = gdal.GetDriverByName ( "GTiff" )
+                    output_prod = "%03d_%s_b%d" % ( doy, kernel, band )
+                    self.output_ptrs[output_prod] = drv.Create( output_fname, \
+                        2400, 2400, 2, gdal.GDT_Float32, options=gdal_opts )
+                    print "... Created!"
+                    
     def do_qa ( self, data_in, n_years ):
         """A simple method to do the QA from the read data. The reason for this is
         to get Python's garbage collector to deallocate the memory of all these
@@ -198,62 +200,53 @@ class GlobAlbedoPrior ( object ):
         land = self._interpret_landcover ( land_data )
         mask = qa*snow*land
         return mask
-    def calculate_prior ( self, brdf_data, mask ):
-        """Calculates the prior mean from the data & data mask
-        Prior is tested, and looks OK, the variance is untested"""
-        prior_mean = np.zeros((3, brdf_data.shape[-2:] ))
-        prior_var = np.zeros((3, brdf_data.shape[-2:] ))
-        for i in xrange ( 3 ):
-            A = np.ma.array ( brdf_data[:, i, :, :]*0.0010, \
-                mask=np.logical_or ( brdf_data[:, i, :, :] == 32767, \
-                mask == 0 ))
-            kw_mean = np.ma.average ( A, axis=0, weights = mask )
-            v1 = np.ma.sum ( mask, axis=0)
-            v2 = np.ma.sum ( mask**2, axsi=0 )
-            kw_weight = np.sum( mask*(A - kw_mean)**2, axis = 0 )*\
-                (v1/(v1*v1 - v2) )
-            prior_mean[i, :, :] = kw_mean
-            prior_var[i, :, :] = kw_weight
-            
-            
-        return prior_mean, prior_var
     
-    def stage1_prior ( self, band ):
+    
+    def stage1_prior ( self ):
         """Produce the stage 1 prior, which is simply a weighted average of the
         kernel weights. This"""
         
-        
-        for doy in self.fnames_mcd43a1.iterkeys():
-            obs_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Parameters_Band%d' % ( f, band ) \
-                    for f in self.fnames_mcd43a1[doy] ]
-            qa_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Band_Quality' % ( f ) \
-                    for f in self.fnames_mcd43a2[doy] ]
-            snow_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:Snow_BRDF_Albedo' % ( f ) \
-                    for f in self.fnames_mcd43a2[doy] ]
-            land_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Ancillary' % ( f ) \
-                    for f in self.fnames_mcd43a2[doy] ]
+        self.create_output ()
+        for band in self.bands:
+            for doy in self.fnames_mcd43a1.iterkeys():
+                print "Doing band %d, DoY %d..." % ( band, doy )
+                obs_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Parameters_Band%d' % ( f, band ) \
+                        for f in self.fnames_mcd43a1[doy] ]
+                qa_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Band_Quality' % ( f ) \
+                        for f in self.fnames_mcd43a2[doy] ]
+                snow_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:Snow_BRDF_Albedo' % ( f ) \
+                        for f in self.fnames_mcd43a2[doy] ]
+                land_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Ancillary' % ( f ) \
+                        for f in self.fnames_mcd43a2[doy] ]
 
 
-            all_files = obs_fnames + qa_fnames + snow_fnames + land_fnames
-            first_time = True
-            for (ds_config, this_X, this_Y, nx_valid, ny_valid, data_in )  \
-                    in extract_chunks ( all_files ):
-                n_years = len ( data_in )/4 # First lot will be BRDF parameters, 2nd will be QA,
-                                            # 3 snow mask and fourth land mask
-                if first_time:
-                    mean_params = np.zeros (( 3, 2400, 2400 ))
-                    # set geotransforme etc for this glorious day
-                    #self.output_ptrs[output_prod].SetGeoTransform( ds_config['geoT'] )
-                    #self.output[output_prod].SetProjection( ds_config['proj'] )
-                    first_time = False
+                all_files = obs_fnames + qa_fnames + snow_fnames + land_fnames
+                for (ds_config, this_X, this_Y, nx_valid, ny_valid, data_in )  \
+                        in extract_chunks ( all_files ):
+                    n_years = len ( data_in )/4 # First lot will be BRDF parameters, 2nd will be QA,
+                                                # 3 snow mask and fourth land mask
 
-                mask = self.do_qa ( data_in, n_years )
-                brdf_data = np.array ( data_in [ :n_years] )
-                data_in = None # Clear memory a bit
-                # Process per kernel weight
-                prior_mean, prior_var = calculate_prior ( brdf_data, mask ) 
-                # data_in contains all the data. Half the samples bands are BRDF parameters        
-
+                    mask = self.do_qa ( data_in, n_years )
+                    brdf_data = np.array ( data_in [ :n_years] )
+                    data_in = None # Clear memory a bit
+                    # Process per kernel weight
+                    prior_mean, prior_var = calculate_prior ( brdf_data, mask )
+                    # data_in contains all the data. Half the samples bands are 
+                    # BRDF parameters        
+                    for i, kernel in enumerate ( [ "iso", "volu", "geo" ] ):
+                        output_prod = "%03d_%s_b%d" % ( doy, kernel, band )
+                        bout = self.output_ptrs[output_prod].GetRasterBand ( 1 )
+                        bout.WriteArray ( prior_mean[i, :, :].astype(np.float32), \
+                            xoff=this_X, yoff=this_Y )
+                        bout = self.output_ptrs[output_prod].GetRasterBand ( 2 )
+                        bout.WriteArray ( prior_var[i, :, :].astype(np.float32), \
+                            xoff=this_X, yoff=this_Y )
+                            
+                output_prod = "%03d_%s_b%d" % (doy, kernel, band) 
+                self.output_ptrs[output_prod].SetGeoTransform( ds_config['geoT'] )
+                self.output_ptrs[output_prod].SetProjection( ds_config['proj'] )
+                print "\t\t Burrpp!!"
+                    
 if __name__ == "__main__":
     ga = GlobAlbedoPrior("h17v04", "/data/netapp_3/plewis/albedo/", "/data/netapp_3/plewis/albedo/prior", bands=[1,2] )
-    ga.stage1_prior ( 2 )
+    ga.stage1_prior()
