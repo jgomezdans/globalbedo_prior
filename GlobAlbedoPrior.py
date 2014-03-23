@@ -82,9 +82,11 @@ class GlobAlbedoPrior ( object ):
         self.no_snow = no_snow
     
     def get_modis_fnames ( self ):
-        """This method gets the MODIS filenames and stores them in dictionaries
+        """Grab MODIS filenames
+        This method gets the MODIS filenames and stores them in dictionaries
         that can be accessed by DoY. This is quite useful for Stage 1 prior
-        creation.
+        creation. This method scans `self.data_dir` for MCD43A1/MCD43A2 files
+        using a filename mask. It only does Collection 5.
         """
         self.fnames_mcd43a1 = {}
         self.fnames_mcd43a2 = {}
@@ -97,14 +99,34 @@ class GlobAlbedoPrior ( object ):
                 root=self.data_dir ) ]
             
     def _interpret_qa ( self, qa_data ):
-        """A method to interpret the QA according to the GlobAlbedo specs"""
+        """Interpret QA
+        A method to interpret the QA according to the GlobAlbedo specs. The 
+        QA flags are translated into a numerical value using `MAGIC`, which
+        is by default defined to be the golden proportion.
+        
+        Parameters
+        ----------
+        qa_data: array
+            An n_years*nx*ny array of QA data, from the MODIS product
+            
+        Returns
+        --------
+        An array with the relevant calculated weights
+        """
         # First stage: consider the QA flag, first 3 bits
         qa = np.bitwise_and ( qa_data, 7L ) # 7 is b000111, ie get the last 3 bits
         weight = np.where ( qa < 4, MAGIC**qa, 0. )
         return weight
     
     def _interpret_snowmask ( self, snow_data ):
-        """Interpret the snow mask"""
+        """Interpret the snow mask
+        Interpret the snow mask as a boolean array, depending on whether we are
+        doing the snow or the snowfree prior.
+        
+        Returns
+        --------
+        A snow mask (boolean)
+        """
         
         if self.no_snow:
             snow = np.where ( snow_data == 0, True, False ) # Snow free
@@ -113,7 +135,13 @@ class GlobAlbedoPrior ( object ):
         return snow
             
     def _interpret_landcover ( self, landcover ):
-        """Interpret the landcover information"""
+        """Interpret the landcover information
+        The landcover flags are filtered. In principle, we just choose 
+        everything under 7, but this can obviously be refined.
+        
+        Returns
+        A boolean array of suitable/unsuitable landcover type
+        """
         # Landcover uses bits 04-07, so 8 + 16 + 32 + 64 = 120L
         # then shift back 3 positions
         mask = np.right_shift(np.bitwise_and ( landcover, 120L), 3)
@@ -143,7 +171,23 @@ class GlobAlbedoPrior ( object ):
     def do_qa ( self, data_in, n_years ):
         """A simple method to do the QA from the read data. The reason for this is
         to get Python's garbage collector to deallocate the memory of all these
-        temporary arrays after we have calculated the mask"""
+        temporary arrays after we have calculated the mask. We assume that 
+        `data_in` stores `n_years` of BRDF data, QA data, snow data and 
+        ancillary data. The order is important, as we use the positions in
+        `data_in` to figure out what each array is.
+        
+        Parameters
+        -----------
+        data_in: list
+            A list with the different data: kernels, QA, snow, 
+            ancillary information...
+        n_years: int
+            The number of years.
+            
+        Returns
+        -------
+        A mask of interpreted QA, with 0 where data are missing.
+        """
         
         qa_data = np.array ( data_in [ (n_years):(2*n_years)] )
         snow_data = np.array ( data_in [ (2*n_years):(3*n_years)] )
@@ -154,6 +198,25 @@ class GlobAlbedoPrior ( object ):
         land = self._interpret_landcover ( land_data )
         mask = qa*snow*land
         return mask
+    def calculate_prior ( self, brdf_data, mask ):
+        """Calculates the prior mean from the data & data mask
+        Prior is tested, and looks OK, the variance is untested"""
+        prior_mean = np.zeros((3, brdf_data.shape[-2:] ))
+        prior_var = np.zeros((3, brdf_data.shape[-2:] ))
+        for i in xrange ( 3 ):
+            A = np.ma.array ( brdf_data[:, i, :, :]*0.0010, \
+                mask=np.logical_or ( brdf_data[:, i, :, :] == 32767, \
+                mask == 0 ))
+            kw_mean = np.ma.average ( A, axis=0, weights = mask )
+            v1 = np.ma.sum ( mask, axis=0)
+            v2 = np.ma.sum ( mask**2, axsi=0 )
+            kw_weight = np.sum( mask*(A - kw_mean)**2, axis = 0 )*\
+                (v1/(v1*v1 - v2) )
+            prior_mean[i, :, :] = kw_mean
+            prior_var[i, :, :] = kw_weight
+            
+            
+        return prior_mean, prior_var
     
     def stage1_prior ( self, band ):
         """Produce the stage 1 prior, which is simply a weighted average of the
@@ -186,16 +249,9 @@ class GlobAlbedoPrior ( object ):
 
                 mask = self.do_qa ( data_in, n_years )
                 brdf_data = np.array ( data_in [ :n_years] )
+                data_in = None # Clear memory a bit
                 # Process per kernel weight
-                for i in xrange ( 3 ):
-                    A = np.ma.array ( brdf_data[:, i, :, :]*0.0010, \
-                        mask=np.logical_or ( brdf_data[:, i, :, :] == 32767, \
-                        mask == 0 ))
-                
-                    mean_params[i,(this_Y):(this_Y + ny_valid ), \
-                        (this_X):(this_X+nx_valid)] = np.ma.average ( \
-                            A, axis=0,weights=mask)
-                
+                prior_mean, prior_var = calculate_prior ( brdf_data, mask ) 
                 # data_in contains all the data. Half the samples bands are BRDF parameters        
 
 if __name__ == "__main__":
