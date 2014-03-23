@@ -285,8 +285,3 @@ class GlobAlbedoPrior ( object ):
                 dst_ds.SetGeoTransform ( g.GetGeoTransform() )
                 dst_ds.SetProjection ( g.GetProjection() )
                 dst_ds = None
-            
-        
-if __name__ == "__main__":
-    ga = GlobAlbedoPrior("h17v04", "/data/netapp_3/plewis/albedo/", "/data/netapp_3/plewis/albedo/prior", bands=[1,2] )
-    ga.stage1_prior()
