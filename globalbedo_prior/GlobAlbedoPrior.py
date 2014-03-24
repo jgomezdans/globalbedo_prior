@@ -224,7 +224,7 @@ class GlobAlbedoPrior ( object ):
         
         self.create_output ()
         for band in self.bands:
-            for doy in self.fnames_mcd43a1.iterkeys():
+            for doy in xrange ( 1, 367, 8 ):
                 LOG.info ("Doing band %d, DoY %d..." % ( band, doy ) )
                 obs_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Parameters_Band%d' % ( f, band ) \
                         for f in self.fnames_mcd43a1[doy] ]
@@ -239,7 +239,7 @@ class GlobAlbedoPrior ( object ):
                 all_files = obs_fnames + qa_fnames + snow_fnames + land_fnames
                 for (ds_config, this_X, this_Y, nx_valid, ny_valid, data_in )  \
                         in extract_chunks ( all_files ):
-                    LOG.info ("Read a %d x %d pixel chunk..." % ( ny_valid, nx_valid ) )
+                    LOG.info ("\t\tRead a %d x %d pixel chunk..." % ( ny_valid, nx_valid ) )
                     n_years = len ( data_in )/4 # First lot will be BRDF parameters, 2nd will be QA,
                                                 # 3 snow mask and fourth land mask
 
