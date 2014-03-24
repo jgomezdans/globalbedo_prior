@@ -16,6 +16,7 @@ setup(
         "console_scripts": ['alvedro_prior = globalbedo_prior.alvedro_prior:main']
         },
     version = version,
+    long_description=open("README.rst", 'r').read(), 
     description = "A Python implementation of the GlobAlbedo prior calculations.",
     author = "J Gomez-Dans",
     author_email = "j.gomez-dans@ucl.ac.uk",
