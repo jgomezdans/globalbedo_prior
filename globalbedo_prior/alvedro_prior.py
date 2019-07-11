@@ -18,8 +18,8 @@ __email__ = "j.gomez-dans@ucl.ac.uk"
 __status__ = "Development"
 
 def main():
-    print("%s, version %s.\nJ Gomez-Dans (NCEO & UCL)" % \
-        (__doc__, __version__))
+    print(("%s, version %s.\nJ Gomez-Dans (NCEO & UCL)" % \
+        (__doc__, __version__)))
     parser = optparse.OptionParser(formatter=optparse.TitledHelpFormatter(), \
       usage=globals()['__doc__'])
     parser.add_option ('-t', '--tile', action='store', dest="tile", \

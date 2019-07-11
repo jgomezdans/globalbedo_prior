@@ -22,14 +22,14 @@ import time
 try:
     import numpy as np
 except ImportError:
-    print "You need to have numpy installed!"
+    print("You need to have numpy installed!")
 
 try:
     from osgeo import gdal
 except ImportError:
-    print "You need to have the GDAL Python bindings installed!"
+    print("You need to have the GDAL Python bindings installed!")
 import matplotlib.pyplot as plt
-from ga_utils import *
+from .ga_utils import *
 
 # Authors etc
 __author__ = "P Lewis & J Gomez-Dans (NCEO&UCL)"
@@ -100,7 +100,7 @@ class GlobAlbedoPrior ( object ):
         self.fnames_mcd43a2 = {}
         a1_files = 0
         a2_files = 0
-        for doy in xrange ( 1, 367, 8 ):
+        for doy in range ( 1, 367, 8 ):
             pattern = "MCD43A1.A????%03d.%s.005.*.hdf" % ( doy, self.tile )
             self.fnames_mcd43a1[doy] = [ f for f in locate( pattern, \
                 root=self.data_dir ) ]
@@ -131,7 +131,7 @@ class GlobAlbedoPrior ( object ):
         An array with the relevant calculated weights
         """
         # First stage: consider the QA flag, first 3 bits
-        qa = np.bitwise_and ( qa_data, 7L ) # 7 is b000111, ie get the last 3 bits
+        qa = np.bitwise_and ( qa_data, 7 ) # 7 is b000111, ie get the last 3 bits
         weight = np.where ( qa < 4, MAGIC**qa, 0. )
         return weight
     
@@ -161,7 +161,7 @@ class GlobAlbedoPrior ( object ):
         """
         # Landcover uses bits 04-07, so 8 + 16 + 32 + 64 = 120L
         # then shift back 3 positions
-        mask = np.right_shift(np.bitwise_and ( landcover, 120L), 3)
+        mask = np.right_shift(np.bitwise_and ( landcover, 120), 3)
         mask = np.where ( mask < 7, True, False ) # ignore deep ocean
         return mask
     
@@ -169,7 +169,7 @@ class GlobAlbedoPrior ( object ):
         self.output_ptrs = {}
 
         for band in self.bands:
-            for doy in self.fnames_mcd43a1.iterkeys():
+            for doy in self.fnames_mcd43a1.keys():
                 for kernel in [ "iso", "volu", "geo"]:
                     output_fname = os.path.join ( self.output_dir, \
                         "MCD43P.%03d.%s.%s.b%d.tif" % \
@@ -224,7 +224,7 @@ class GlobAlbedoPrior ( object ):
         
         self.create_output ()
         for band in self.bands:
-            for doy in xrange ( 1, 367, 8 ):
+            for doy in range ( 1, 367, 8 ):
                 LOG.info ("Doing band %d, DoY %d..." % ( band, doy ) )
                 obs_fnames = [ 'HDF4_EOS:EOS_GRID:"%s":MOD_Grid_BRDF:BRDF_Albedo_Parameters_Band%d' % ( f, band ) \
                         for f in self.fnames_mcd43a1[doy] ]

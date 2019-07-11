@@ -17,12 +17,12 @@ import time
 try:
     import numpy as np
 except ImportError:
-    print "You need to have numpy installed!"
+    print("You need to have numpy installed!")
 
 try:
     from osgeo import gdal
 except ImportError:
-    print "You need to have the GDAL Python bindings installed!"
+    print("You need to have the GDAL Python bindings installed!")
 
 # Authors etc
 __author__ = "P Lewis & J Gomez-Dans (NCEO&UCL)"
@@ -52,7 +52,7 @@ def calculate_prior ( brdf_data, mask ):
     Prior is tested, and looks OK, the variance is untested"""
     prior_mean = np.zeros((3, brdf_data.shape[-2], brdf_data.shape[-1] ))
     prior_var = np.zeros((3, brdf_data.shape[-2], brdf_data.shape[-1]))
-    for i in xrange ( 3 ):
+    for i in range ( 3 ):
         A = np.ma.array ( brdf_data[:, i, :, :]*0.0010, \
             mask=np.logical_or ( brdf_data[:, i, :, :] == 32767, \
             mask == 0 ))
@@ -152,7 +152,7 @@ def extract_chunks ( the_files, the_bands = None ):
     # start looping through blocks of data
     ################################################################
     # loop through X-lines
-    for X in xrange( nx_blocks ):
+    for X in range( nx_blocks ):
         # change the block size of the final piece
         if X == nx_blocks-1:
              nx_valid = nx - X * block_size[0]
@@ -166,7 +166,7 @@ def extract_chunks ( the_files, the_bands = None ):
         buf_size = nx_valid*ny_valid
 
         # loop through Y lines
-        for Y in xrange( ny_blocks ):
+        for Y in range( ny_blocks ):
             # change the block size of the final piece
             if Y == ny_blocks-1:
                 ny_valid = ny - Y * block_size[1]
